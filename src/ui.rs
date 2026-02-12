@@ -13,8 +13,8 @@ use crate::components::{
     DataTable, FileSchemaTable, RowGroupColumnMetadataComponent, RowGroupMetadata,
     RowGroupProgressBar, SchemaTreeComponent, ScrollbarComponent,
 };
-use crate::file::sql::SqlResult;
 use crate::file::Renderable;
+use crate::file::sql::SqlResult;
 
 pub fn render_app<'a, 'b>(app: &'b AppRenderView<'a>, frame: &mut Frame)
 where
@@ -158,13 +158,11 @@ impl<'a> AppWidget<'a> {
 
         if self.0.state().search_mode {
             let prompt = format!("Search: {}|", self.0.state().search_query);
-            let line = Line::from(vec![
-                prompt.green(),
-                "  Enter=filter, Esc=cancel".into(),
-            ]);
+            let line = Line::from(vec![prompt.green(), "  Enter=filter, Esc=cancel".into()]);
             line.render(footer_area, buf);
         } else if self.0.state().search_filter.is_some() {
-            let n = self.0
+            let n = self
+                .0
                 .state()
                 .filtered_sample_data
                 .as_ref()
@@ -285,10 +283,7 @@ impl<'a> AppWidget<'a> {
             .with_vertical_scroll(self.0.state().data_vertical_scroll())
             .with_selected_row(Some(self.0.state().vertical_offset()));
         if self.0.state().search_filter.is_some() {
-            table = table.with_title(format!(
-                "Data (filtered: {} rows)",
-                data.total_rows
-            ));
+            table = table.with_title(format!("Data (filtered: {} rows)", data.total_rows));
         }
         table.render(area, buf)
     }
@@ -306,17 +301,16 @@ impl<'a> AppWidget<'a> {
         block.render(input_area, buf);
 
         let query_line = format!("SQL> {}", self.0.state().sql_query);
-        Paragraph::new(Line::from(Span::raw(query_line)))
-            .render(inner_input, buf);
+        Paragraph::new(Line::from(Span::raw(query_line))).render(inner_input, buf);
 
         // Cursor at end of SQL input
         let cursor_x = inner_input.x + 5 + (self.0.state().sql_query.chars().count() as u16);
         let cursor_y = inner_input.y;
-        if cursor_x < inner_input.x + inner_input.width {
-            if let Some(cell) = buf.cell_mut(Position::new(cursor_x, cursor_y)) {
-                cell.set_symbol(" ");
-                cell.set_style(Style::default().bg(Color::Cyan).fg(Color::Black));
-            }
+        if cursor_x < inner_input.x + inner_input.width
+            && let Some(cell) = buf.cell_mut(Position::new(cursor_x, cursor_y))
+        {
+            cell.set_symbol(" ");
+            cell.set_style(Style::default().bg(Color::Cyan).fg(Color::Black));
         }
 
         match &self.0.state().sql_result {
@@ -415,12 +409,9 @@ impl<'a> AppWidget<'a> {
         let inner = block.inner(area);
         block.render(area, buf);
         // Paragraph scroll is (vertical, horizontal)
-        let max_vertical = lines
-            .len()
-            .saturating_sub(inner.height as usize)
-            .max(0);
+        let max_vertical = lines.len().saturating_sub(inner.height as usize).max(0);
         let vertical_scroll = state.detail_scroll_offset.min(max_vertical) as u16;
-        let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0) as usize;
+        let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
         let max_horizontal = max_line_width.saturating_sub(inner.width as usize).max(0);
         let horizontal_scroll = state.detail_scroll_horizontal.min(max_horizontal) as u16;
         Paragraph::new(Text::from(lines))

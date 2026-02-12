@@ -6,12 +6,12 @@ use ratatui::text::Line;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 
+use crate::tabs::Tab;
 use crate::tabs::metadata::MetadataTab;
 use crate::tabs::row_groups::RowGroupsTab;
 use crate::tabs::schema::SchemaTab;
 use crate::tabs::sql::SqlTab;
 use crate::tabs::visualize::VisualizeTab;
-use crate::tabs::Tab;
 
 pub struct TabManager {
     pub tabs: Vec<Box<dyn Tab>>,
