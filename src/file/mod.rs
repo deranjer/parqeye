@@ -3,6 +3,7 @@ pub mod parquet_ctx;
 pub mod row_groups;
 pub mod sample_data;
 pub mod schema;
+pub mod sql;
 pub mod utils;
 
 use std::{env, error::Error, path::PathBuf};

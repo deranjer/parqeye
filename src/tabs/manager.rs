@@ -6,11 +6,12 @@ use ratatui::text::Line;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 
-use crate::tabs::Tab;
 use crate::tabs::metadata::MetadataTab;
 use crate::tabs::row_groups::RowGroupsTab;
 use crate::tabs::schema::SchemaTab;
+use crate::tabs::sql::SqlTab;
 use crate::tabs::visualize::VisualizeTab;
+use crate::tabs::Tab;
 
 pub struct TabManager {
     pub tabs: Vec<Box<dyn Tab>>,
@@ -38,6 +39,7 @@ impl TabManager {
                         .with_max_horizontal_scroll(num_row_groups - 1)
                         .with_max_vertical_scroll(num_columns),
                 ),
+                Box::new(SqlTab::new()),
             ],
             active_tab: 0,
             title: "Tabs".to_string(),
@@ -70,8 +72,8 @@ impl TabManager {
             "[Tab]".green(),
             " Next Tab".into(),
             ", ".into(),
-            "[Q]".blue(),
-            "uit".into(),
+            "[Ctrl+X]".blue(),
+            " Quit".into(),
         ]);
         let line = Line::from(span);
 

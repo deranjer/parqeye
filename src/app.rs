@@ -1,8 +1,10 @@
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::DefaultTerminal;
 use std::io;
 
 use crate::file::parquet_ctx::ParquetCtx;
+use crate::file::sample_data::ParquetSampleData;
+use crate::file::sql::{run_sql, SqlResult};
 use crate::tabs::TabManager;
 
 pub struct AppRenderView<'a> {
@@ -51,6 +53,18 @@ pub struct AppState {
     tree_scroll_offset: usize,
     data_vertical_scroll: usize,
     visible_data_rows: usize,
+    // Search: "/" to enter search mode, Enter to filter, Esc to cancel or clear filter
+    pub search_mode: bool,
+    pub search_query: String,
+    pub search_filter: Option<String>,
+    pub filtered_sample_data: Option<ParquetSampleData>,
+    // SQL tab
+    pub sql_query: String,
+    pub sql_result: Option<SqlResult>,
+    // Row detail overlay: when Some(row_idx), show full row data for that row
+    pub row_detail_row: Option<usize>,
+    pub detail_scroll_offset: usize,   // vertical (lines)
+    pub detail_scroll_horizontal: usize, // horizontal (columns)
 }
 
 impl Default for AppState {
@@ -67,6 +81,15 @@ impl AppState {
             tree_scroll_offset: 0,
             data_vertical_scroll: 0,
             visible_data_rows: 20, // Default fallback
+            search_mode: false,
+            search_query: String::new(),
+            search_filter: None,
+            filtered_sample_data: None,
+            sql_query: String::new(),
+            sql_result: None,
+            row_detail_row: None,
+            detail_scroll_offset: 0,
+            detail_scroll_horizontal: 0,
         }
     }
 
@@ -75,6 +98,11 @@ impl AppState {
         self.vertical_offset = 0;
         self.tree_scroll_offset = 0;
         self.data_vertical_scroll = 0;
+    }
+
+    pub fn clear_search_filter(&mut self) {
+        self.search_filter = None;
+        self.filtered_sample_data = None;
     }
 
     pub fn horizontal_offset(&self) -> usize {
@@ -205,9 +233,101 @@ impl<'a> App<'a> {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        // Row detail overlay: Esc (close), ↑↓ PgUp PgDn (vertical), ←→ (horizontal), Ctrl+X (quit)
+        if self.state.row_detail_row.is_some() {
+            const DETAIL_PAGE_SIZE: usize = 10;
+            match key_event.code {
+                KeyCode::Esc => {
+                    self.state.row_detail_row = None;
+                }
+                KeyCode::Up => {
+                    self.state.detail_scroll_offset =
+                        self.state.detail_scroll_offset.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    self.state.detail_scroll_offset += 1;
+                }
+                KeyCode::PageUp => {
+                    self.state.detail_scroll_offset = self
+                        .state
+                        .detail_scroll_offset
+                        .saturating_sub(DETAIL_PAGE_SIZE);
+                }
+                KeyCode::PageDown => {
+                    self.state.detail_scroll_offset += DETAIL_PAGE_SIZE;
+                }
+                KeyCode::Left => {
+                    self.state.detail_scroll_horizontal = self
+                        .state
+                        .detail_scroll_horizontal
+                        .saturating_sub(1);
+                }
+                KeyCode::Right => {
+                    self.state.detail_scroll_horizontal += 1;
+                }
+                KeyCode::Char('x') | KeyCode::Char('X')
+                    if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                {
+                    self.exit();
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Search mode: consume input until Enter or Esc
+        if self.state.search_mode {
+            match key_event.code {
+                KeyCode::Esc => {
+                    self.state.search_mode = false;
+                    self.state.search_query.clear();
+                }
+                KeyCode::Enter => {
+                    let query = self.state.search_query.clone();
+                    let filtered = self.parquet_ctx.sample_data.filter_rows(&query);
+                    self.state.search_filter = Some(query);
+                    self.state.filtered_sample_data = Some(filtered);
+                    self.state.reset();
+                    self.state.search_mode = false;
+                }
+                KeyCode::Backspace => {
+                    self.state.search_query.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.state.search_query.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match key_event.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => self.exit(),
-            KeyCode::Esc => self.state.reset(),
+            KeyCode::Char('x') | KeyCode::Char('X')
+                if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.exit()
+            }
+            KeyCode::Esc => {
+                if self.state.search_filter.is_some() {
+                    self.state.clear_search_filter();
+                    self.state.reset();
+                } else if self.tabs.active_tab().to_string() == "SQL" {
+                    self.state.sql_query.clear();
+                    self.state.sql_result = None;
+                } else {
+                    self.state.reset();
+                }
+            }
+            KeyCode::Char('/') => {
+                self.state.search_mode = true;
+                self.state.search_query.clear();
+            }
+            KeyCode::Enter if self.tabs.active_tab().to_string() == "SQL" => {
+                self.state.sql_result = Some(run_sql(
+                    &self.parquet_ctx.file_path,
+                    &self.state.sql_query,
+                ));
+            }
             KeyCode::Tab => {
                 self.tabs.next();
                 self.state.reset();

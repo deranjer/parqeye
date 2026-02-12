@@ -12,10 +12,13 @@
 **Features**
 
 - **Interactive Data Visualization** - Browse through your Parquet data in a table view with keyboard navigation.
+- **Text search** - Press `/` to search across all columns; results are filtered to matching rows. Press Esc to clear the filter.
+- **SQL tab** - Run SQL queries against the open Parquet file (table name: `parquet`). Results appear in a table; press `v` on a row to view full row detail.
+- **Row detail view** - On the Visualize or SQL result view, press `v` on the selected row to see every column and value on one screen. Scroll with ↑↓ PgUp PgDn (vertical) and ←→ (horizontal). Esc to close.
 - **Schema Explorer** - Inspect column types, nested structures, and field definitions.
 - **File Metadata** - View Parquet file-level metadata including version, created by, encoding stats and more.
 - **Row Group Statistics** - Examine row group-level metadata, statistics, and data distribution across groups.
-- **Tab-based Interface** - Quickly switch between Visualize, Schema, Metadata, and Row Groups views.
+- **Tab-based Interface** - Switch between Visualize, Schema, Metadata, Row Groups, and SQL views.
 - **Terminal-native** - Works directly in your terminal.
 
 # Usage
@@ -25,6 +28,41 @@ Run `parqeye` by providing the path to the `.parquet` file.
 ```
 parqeye <path-to-parquet-file>
 ```
+
+# Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| **Tab** / **Shift+Tab** | Next / previous tab |
+| **Ctrl+X** | Quit |
+| **/** | Start search (type query, Enter to filter; Esc to cancel or clear filter) |
+| **Esc** | Cancel search, clear SQL query, clear search filter, or close row detail view (context-dependent) |
+
+**Visualize tab**
+
+| Key | Action |
+|-----|--------|
+| **↑ / ↓** | Move row |
+| **← / →** | Move column |
+| **u / d** | Page up / down |
+| **v** | Open row detail view for selected row |
+
+**SQL tab**
+
+| Key | Action |
+|-----|--------|
+| Type | Edit query (cursor at end of line) |
+| **Enter** | Run query (table name: `parquet`) |
+| **v** | Open row detail view for selected result row (when results are shown) |
+
+**Row detail view** (after pressing `v`)
+
+| Key | Action |
+|-----|--------|
+| **Esc** | Close and return to table |
+| **↑ / ↓** | Scroll one line up / down |
+| **PgUp / PgDn** | Scroll one page up / down |
+| **← / →** | Scroll left / right (for long values) |
 
 # Installation
 
@@ -68,5 +106,4 @@ This package is released under the [MIT License](./LICENSE).
 # TODOs
 
 - [ ] Lazy/streaming loading of parquet files.
-- [ ] Filter columns by value in the visualize tab.
 - [ ] Read parquet files on the cloud (`s3://...`).
