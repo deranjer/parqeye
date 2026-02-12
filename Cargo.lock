@@ -2188,6 +2188,7 @@ dependencies = [
  "parquet",
  "parquet-format",
  "polars",
+ "polars-sql",
  "ratatui",
 ]
 

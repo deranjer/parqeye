@@ -2,9 +2,10 @@ use ratatui::{
     Frame,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    prelude::Color,
+    prelude::{Color, Position},
     style::{Style, Stylize},
-    widgets::{Block, BorderType, Borders, Widget},
+    text::{Line, Span, Text},
+    widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 
 use crate::app::AppRenderView;
@@ -12,6 +13,7 @@ use crate::components::{
     DataTable, FileSchemaTable, RowGroupColumnMetadataComponent, RowGroupMetadata,
     RowGroupProgressBar, SchemaTreeComponent, ScrollbarComponent,
 };
+use crate::file::sql::SqlResult;
 use crate::file::Renderable;
 
 pub fn render_app<'a, 'b>(app: &'b AppRenderView<'a>, frame: &mut Frame)
@@ -154,7 +156,33 @@ impl<'a> AppWidget<'a> {
             Layout::horizontal([Constraint::Length(title_width), Constraint::Fill(1)]).areas(area);
         self.0.title.bold().fg(Color::Green).render(title_area, buf);
 
-        self.0.tabs().render_instructions(footer_area, buf);
+        if self.0.state().search_mode {
+            let prompt = format!("Search: {}|", self.0.state().search_query);
+            let line = Line::from(vec![
+                prompt.green(),
+                "  Enter=filter, Esc=cancel".into(),
+            ]);
+            line.render(footer_area, buf);
+        } else if self.0.state().search_filter.is_some() {
+            let n = self.0
+                .state()
+                .filtered_sample_data
+                .as_ref()
+                .map(|d| d.total_rows)
+                .unwrap_or(0);
+            use ratatui::text::Line;
+            let mut span = self.0.tabs().active_tab().instructions();
+            if !span.is_empty() {
+                span.push(" - ".into());
+            }
+            span.extend(vec![
+                format!("{} rows filtered", n).green(),
+                " (Esc to show all)".into(),
+            ]);
+            Line::from(span).render(footer_area, buf);
+        } else {
+            self.0.tabs().render_instructions(footer_area, buf);
+        }
     }
 
     fn render_metadata_view(&self, area: Rect, buf: &mut Buffer) {
@@ -246,11 +274,166 @@ impl<'a> AppWidget<'a> {
     }
 
     fn render_visualize_view(&self, area: Rect, buf: &mut Buffer) {
-        DataTable::new(&self.0.parquet_ctx.sample_data)
+        let data = self
+            .0
+            .state()
+            .filtered_sample_data
+            .as_ref()
+            .unwrap_or(&self.0.parquet_ctx.sample_data);
+        let mut table = DataTable::new(data)
             .with_horizontal_scroll(self.0.state().horizontal_offset())
             .with_vertical_scroll(self.0.state().data_vertical_scroll())
-            .with_selected_row(Some(self.0.state().vertical_offset()))
-            .render(area, buf)
+            .with_selected_row(Some(self.0.state().vertical_offset()));
+        if self.0.state().search_filter.is_some() {
+            table = table.with_title(format!(
+                "Data (filtered: {} rows)",
+                data.total_rows
+            ));
+        }
+        table.render(area, buf)
+    }
+
+    fn render_sql_view(&self, area: Rect, buf: &mut Buffer) {
+        let [input_area, results_area] =
+            Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" SQL ");
+        let inner_input = block.inner(input_area);
+        block.render(input_area, buf);
+
+        let query_line = format!("SQL> {}", self.0.state().sql_query);
+        Paragraph::new(Line::from(Span::raw(query_line)))
+            .render(inner_input, buf);
+
+        // Cursor at end of SQL input
+        let cursor_x = inner_input.x + 5 + (self.0.state().sql_query.chars().count() as u16);
+        let cursor_y = inner_input.y;
+        if cursor_x < inner_input.x + inner_input.width {
+            if let Some(cell) = buf.cell_mut(Position::new(cursor_x, cursor_y)) {
+                cell.set_symbol(" ");
+                cell.set_style(Style::default().bg(Color::Cyan).fg(Color::Black));
+            }
+        }
+
+        match &self.0.state().sql_result {
+            Some(SqlResult::Ok(data)) => {
+                DataTable::new(data)
+                    .with_title("Query result".to_string())
+                    .with_horizontal_scroll(self.0.state().horizontal_offset())
+                    .with_vertical_scroll(self.0.state().data_vertical_scroll())
+                    .with_selected_row(Some(self.0.state().vertical_offset()))
+                    .render(results_area, buf);
+            }
+            Some(SqlResult::Err(msg)) => {
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Color::Red))
+                    .title(" Error ");
+                let inner = block.inner(results_area);
+                block.render(results_area, buf);
+                Paragraph::new(Line::from(Span::styled(
+                    msg.as_str(),
+                    Style::default().fg(Color::Red),
+                )))
+                .render(inner, buf);
+            }
+            None => {
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Color::DarkGray));
+                let inner = block.inner(results_area);
+                block.render(results_area, buf);
+                Paragraph::new(Line::from(Span::raw(
+                    "Enter SQL and press Enter to run. Table name: parquet",
+                )))
+                .render(inner, buf);
+            }
+        }
+    }
+
+    fn render_row_detail_view(&self, area: Rect, buf: &mut Buffer) {
+        let state = self.0.state();
+        let row_idx = match state.row_detail_row {
+            Some(i) => i,
+            None => return,
+        };
+        let (lines, title) = match self.0.tabs().active_tab().to_string().as_str() {
+            "Visualize" => {
+                let data = state
+                    .filtered_sample_data
+                    .as_ref()
+                    .unwrap_or(&self.0.parquet_ctx.sample_data);
+                match data.rows.get(row_idx) {
+                    Some(row) => (
+                        Self::row_detail_lines(&data.flattened_columns, row),
+                        format!("Row {} (Visualize)", row_idx + 1),
+                    ),
+                    None => (
+                        vec![Line::from(Span::raw("Row out of range"))],
+                        "Row detail".to_string(),
+                    ),
+                }
+            }
+            "SQL" => {
+                if let Some(SqlResult::Ok(data)) = &state.sql_result {
+                    match data.rows.get(row_idx) {
+                        Some(row) => (
+                            Self::row_detail_lines(&data.flattened_columns, row),
+                            format!("Row {} (SQL result)", row_idx + 1),
+                        ),
+                        None => (
+                            vec![Line::from(Span::raw("Row out of range"))],
+                            "Row detail".to_string(),
+                        ),
+                    }
+                } else {
+                    (
+                        vec![Line::from(Span::raw("No result data"))],
+                        "Row detail".to_string(),
+                    )
+                }
+            }
+            _ => (
+                vec![Line::from(Span::raw("No data"))],
+                "Row detail".to_string(),
+            ),
+        };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Yellow))
+            .title(format!(
+                " {} (Esc close, ↑↓ PgUp PgDn scroll, ←→ horizontal) ",
+                title
+            ));
+        let inner = block.inner(area);
+        block.render(area, buf);
+        // Paragraph scroll is (vertical, horizontal)
+        let max_vertical = lines
+            .len()
+            .saturating_sub(inner.height as usize)
+            .max(0);
+        let vertical_scroll = state.detail_scroll_offset.min(max_vertical) as u16;
+        let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0) as usize;
+        let max_horizontal = max_line_width.saturating_sub(inner.width as usize).max(0);
+        let horizontal_scroll = state.detail_scroll_horizontal.min(max_horizontal) as u16;
+        Paragraph::new(Text::from(lines))
+            .scroll((vertical_scroll, horizontal_scroll))
+            .render(inner, buf);
+    }
+
+    fn row_detail_lines(columns: &[String], row: &[String]) -> Vec<Line<'static>> {
+        columns
+            .iter()
+            .zip(row.iter())
+            .map(|(c, v)| Line::from(Span::raw(format!("{}: {}", c, v))))
+            .collect()
     }
 }
 
@@ -268,12 +451,17 @@ impl<'a> Widget for AppWidget<'a> {
         self.render_tabs_view(header_area, buf);
         self.render_footer_view(footer_area, buf);
 
-        match app.tabs().active_tab().to_string().as_str() {
-            "Metadata" => self.render_metadata_view(inner_area, buf),
-            "Schema" => self.render_schema_view(inner_area, buf),
-            "Row Groups" => self.render_row_groups_view(inner_area, buf),
-            "Visualize" => self.render_visualize_view(inner_area, buf),
-            _ => {}
+        if app.state().row_detail_row.is_some() {
+            self.render_row_detail_view(inner_area, buf);
+        } else {
+            match app.tabs().active_tab().to_string().as_str() {
+                "Metadata" => self.render_metadata_view(inner_area, buf),
+                "Schema" => self.render_schema_view(inner_area, buf),
+                "Row Groups" => self.render_row_groups_view(inner_area, buf),
+                "Visualize" => self.render_visualize_view(inner_area, buf),
+                "SQL" => self.render_sql_view(inner_area, buf),
+                _ => {}
+            }
         }
     }
 }

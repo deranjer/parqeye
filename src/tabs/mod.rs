@@ -2,11 +2,13 @@ pub mod manager;
 pub mod metadata;
 pub mod row_groups;
 pub mod schema;
+pub mod sql;
 pub mod visualize;
 
 pub use manager::TabManager;
 pub use metadata::MetadataTab;
 pub use schema::SchemaTab;
+pub use sql::SqlTab;
 pub use visualize::VisualizeTab;
 
 use crate::app::AppState;

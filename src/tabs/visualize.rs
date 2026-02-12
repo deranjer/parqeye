@@ -76,6 +76,11 @@ impl Tab for VisualizeTab {
             {
                 state.right()
             }
+            KeyCode::Char('v') | KeyCode::Char('V') => {
+                state.row_detail_row = Some(state.vertical_offset());
+                state.detail_scroll_offset = 0;
+                state.detail_scroll_horizontal = 0;
+            }
             _ => {}
         }
         Ok(())
@@ -100,6 +105,10 @@ impl Tab for VisualizeTab {
             "d".blue(),
             " : ".into(),
             "Page".into(),
+            " | ".white(),
+            "v".green(),
+            " : ".into(),
+            "Row detail".into(),
         ]
     }
 

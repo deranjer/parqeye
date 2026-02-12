@@ -73,4 +73,23 @@ impl ParquetSampleData {
             Err(_) => "NULL".to_string(),
         }
     }
+
+    /// Filter rows to those where any cell contains `query` as a substring.
+    pub fn filter_rows(&self, query: &str) -> ParquetSampleData {
+        if query.is_empty() {
+            return self.clone();
+        }
+        let rows: Vec<Vec<String>> = self
+            .rows
+            .iter()
+            .filter(|row| row.iter().any(|cell| cell.contains(query)))
+            .cloned()
+            .collect();
+        ParquetSampleData {
+            flattened_columns: self.flattened_columns.clone(),
+            total_columns: self.total_columns,
+            total_rows: rows.len(),
+            rows,
+        }
+    }
 }
