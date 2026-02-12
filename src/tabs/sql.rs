@@ -27,7 +27,11 @@ impl Tab for SqlTab {
                 state.sql_query.pop();
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
-                if state.sql_result.as_ref().is_some_and(|r| matches!(r, SqlResult::Ok(_))) {
+                if state
+                    .sql_result
+                    .as_ref()
+                    .is_some_and(|r| matches!(r, SqlResult::Ok(_)))
+                {
                     state.row_detail_row = Some(state.vertical_offset());
                     state.detail_scroll_offset = 0;
                     state.detail_scroll_horizontal = 0;

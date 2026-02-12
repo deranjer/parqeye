@@ -4,7 +4,7 @@ use std::io;
 
 use crate::file::parquet_ctx::ParquetCtx;
 use crate::file::sample_data::ParquetSampleData;
-use crate::file::sql::{run_sql, SqlResult};
+use crate::file::sql::{SqlResult, run_sql};
 use crate::tabs::TabManager;
 
 pub struct AppRenderView<'a> {
@@ -63,7 +63,7 @@ pub struct AppState {
     pub sql_result: Option<SqlResult>,
     // Row detail overlay: when Some(row_idx), show full row data for that row
     pub row_detail_row: Option<usize>,
-    pub detail_scroll_offset: usize,   // vertical (lines)
+    pub detail_scroll_offset: usize,     // vertical (lines)
     pub detail_scroll_horizontal: usize, // horizontal (columns)
 }
 
@@ -257,10 +257,8 @@ impl<'a> App<'a> {
                     self.state.detail_scroll_offset += DETAIL_PAGE_SIZE;
                 }
                 KeyCode::Left => {
-                    self.state.detail_scroll_horizontal = self
-                        .state
-                        .detail_scroll_horizontal
-                        .saturating_sub(1);
+                    self.state.detail_scroll_horizontal =
+                        self.state.detail_scroll_horizontal.saturating_sub(1);
                 }
                 KeyCode::Right => {
                     self.state.detail_scroll_horizontal += 1;
@@ -323,10 +321,8 @@ impl<'a> App<'a> {
                 self.state.search_query.clear();
             }
             KeyCode::Enter if self.tabs.active_tab().to_string() == "SQL" => {
-                self.state.sql_result = Some(run_sql(
-                    &self.parquet_ctx.file_path,
-                    &self.state.sql_query,
-                ));
+                self.state.sql_result =
+                    Some(run_sql(&self.parquet_ctx.file_path, &self.state.sql_query));
             }
             KeyCode::Tab => {
                 self.tabs.next();

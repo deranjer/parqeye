@@ -32,7 +32,9 @@ pub fn run_sql(path: &str, query: &str) -> SqlResult {
         Ok(df) => df,
         Err(e) => return SqlResult::Err(e.to_string()),
     };
-    dataframe_to_sample_data(df).map(SqlResult::Ok).unwrap_or_else(SqlResult::Err)
+    dataframe_to_sample_data(df)
+        .map(SqlResult::Ok)
+        .unwrap_or_else(SqlResult::Err)
 }
 
 fn dataframe_to_sample_data(df: DataFrame) -> Result<ParquetSampleData, String> {
@@ -47,7 +49,7 @@ fn dataframe_to_sample_data(df: DataFrame) -> Result<ParquetSampleData, String> 
         let mut row = Vec::new();
         for col in df.get_columns() {
             let series = col.as_materialized_series();
-            row.push(get_value_as_string(&series, row_idx));
+            row.push(get_value_as_string(series, row_idx));
         }
         rows.push(row);
     }
